@@ -76,6 +76,7 @@ import { streamingStringKeysForTool, ToolArgsRevealController } from "./tool-arg
 
 import {
 	cfgCompletionNotify,
+	cfgDisplayAutoCollapseOnTurnEnd,
 	cfgDisplayCacheMissMarker,
 	cfgDisplayShowTokenUsage,
 	cfgDisplayShowTurnTime,
@@ -482,6 +483,39 @@ export class EventController {
 		this.#lastReadGroup?.finalize();
 		this.#lastReadGroup = undefined;
 	}
+	/**
+	 * `display.autoCollapseOnTurnEnd`: fold the finished turn's activity behind
+	 * its final answer. Tool cards collapse through the same per-block state
+	 * Ctrl+O drives, but the sticky `toolOutputExpanded` preference is left
+	 * alone, so the next turn starts from the user's chosen state and Ctrl+O
+	 * re-expands the collapsed turn in one keystroke. Thinking sections fold
+	 * through the component's per-section state — every assistant block, the
+	 * same reach as the thinking-visibility toggle — and only native rendering
+	 * has a folded thinking presentation; the ANSI transcript renders thinking
+	 * inline. Background jobs are skipped: their cards may still land output.
+	 */
+	#collapseTurnActivity(): void {
+		if (!cfgDisplayAutoCollapseOnTurnEnd.get(this.ctx.settings)) return;
+		const background = new Set<ToolExecutionHandle>();
+		for (const toolCallId of this.#backgroundCallIds) {
+			const component = this.ctx.pendingTools.get(toolCallId);
+			if (component) background.add(component);
+		}
+		for (const component of this.#toolTimelineComponents.values()) {
+			if (
+				(component instanceof ToolExecutionComponent || component instanceof ReadToolGroupComponent) &&
+				!background.has(component)
+			) {
+				component.setExpanded(false);
+			}
+		}
+		for (const child of this.ctx.chatContainer.children) {
+			if (child instanceof AssistantMessageComponent) {
+				child.collapseThinkingSections();
+			}
+		}
+	}
+
 	/** Freeze foreground tool cards once no live agent turn can complete them. */
 	#sealAbandonedForegroundTools(): void {
 		const background = new Set<ToolExecutionHandle>();
@@ -2474,6 +2508,7 @@ export class EventController {
 		this.#syncComposerActivity();
 		await this.ctx.flushPendingModelSwitch();
 		this.#sealAbandonedForegroundTools();
+		this.#collapseTurnActivity();
 		this.#blockingPrompts.clear();
 		this.#readToolCallArgs.clear();
 		this.#readToolCallAssistantComponents.clear();

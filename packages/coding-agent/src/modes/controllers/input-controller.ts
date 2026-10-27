@@ -2914,6 +2914,27 @@ export class InputController {
 		this.ctx.ui.requestRender(true);
 	}
 
+	/**
+	 * Session-scoped counterpart to `cfgExpandThinkingBlocks`, mirroring
+	 * {@link setToolsExpanded}: applies to every live assistant block without
+	 * rewriting the persisted setting, so an extension can fold a finished
+	 * turn's thinking from `agent_end` and the next turn still starts from the
+	 * user's configured preference. Only native rendering folds thinking
+	 * sections; the ANSI transcript renders them inline.
+	 */
+	setThinkingExpanded(expanded: boolean): void {
+		this.ctx.expandThinkingBlocks = expanded;
+		for (const child of this.ctx.chatContainer.children) {
+			if (child instanceof AssistantMessageComponent) {
+				child.setExpandThinkingBlocks(expanded);
+			}
+		}
+		if (this.ctx.streamingComponent) {
+			this.ctx.streamingComponent.setExpandThinkingBlocks(expanded);
+		}
+		this.ctx.ui.requestRender(true);
+	}
+
 	toggleThinkingBlockVisibility(): void {
 		// When thinking is "off" and the session has not produced reasoning
 		// content, thinking blocks stay auto-hidden; the toggle would only corrupt

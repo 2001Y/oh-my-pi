@@ -441,6 +441,17 @@ export interface ExtensionUIContext {
 
 	/** Set tool output expansion state. */
 	setToolsExpanded(expanded: boolean): void;
+
+	/** Get whether finished thinking blocks are kept expanded (native rendering). */
+	getThinkingExpanded(): boolean;
+
+	/**
+	 * Set whether finished thinking blocks are kept expanded (native rendering).
+	 * Session-scoped like {@link setToolsExpanded}: it does not rewrite the
+	 * persisted `expandThinkingBlocks` setting. Pair with `setToolsExpanded`
+	 * from an `agent_end` handler to collapse a finished turn's activity.
+	 */
+	setThinkingExpanded(expanded: boolean): void;
 }
 
 // ============================================================================

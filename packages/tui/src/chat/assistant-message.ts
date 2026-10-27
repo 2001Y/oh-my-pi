@@ -652,6 +652,25 @@ export class AssistantMessageComponent extends Container {
 		this.#nativeViewVersion++;
 	}
 
+	/**
+	 * Fold every thinking section of this message to its "Thought for …" head,
+	 * even when {@link setExpandThinkingBlocks} keeps finished sections open.
+	 * Used when a turn ends and its activity collapses behind the final answer.
+	 * A later terminal toggle records a fresh per-section choice and reopens it.
+	 */
+	collapseThinkingSections(): void {
+		const message = this.#displayedMessage;
+		if (!message) return;
+		let changed = false;
+		for (let index = 0; index < message.content.length; index++) {
+			if (message.content[index]?.type !== "thinking") continue;
+			if (this.#thinkingCollapsed.get(index) === true) continue;
+			this.#thinkingCollapsed.set(index, true);
+			changed = true;
+		}
+		if (changed) this.#nativeViewVersion++;
+	}
+
 	override dispose(): void {
 		this.#stopThinkingAnimation();
 		super.dispose();

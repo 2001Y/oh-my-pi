@@ -624,6 +624,7 @@ export interface InteractiveModeContext {
 	cycleRoleModel(direction?: "forward" | "backward"): Promise<void>;
 	toggleToolOutputExpansion(): void;
 	setToolsExpanded(expanded: boolean): void;
+	setThinkingExpanded(expanded: boolean): void;
 	toggleThinkingBlockVisibility(): void;
 	handlePlanModeCommand(
 		initialPrompt?: string,

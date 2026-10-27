@@ -9180,6 +9180,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		this.#inputController.setToolsExpanded(expanded);
 	}
 
+	setThinkingExpanded(expanded: boolean): void {
+		this.#inputController.setThinkingExpanded(expanded);
+	}
+
 	toggleThinkingBlockVisibility(): void {
 		this.#inputController.toggleThinkingBlockVisibility();
 	}
