@@ -256,6 +256,11 @@ export class EventController {
 	// with the other transcript anchors.
 	#orphanedToolCompletions = new Map<string, Extract<AgentSessionEvent, { type: "tool_execution_end" }>>();
 	#postToolAssistantComponents = new Map<string, AssistantMessageComponent>();
+	// Assistant components already in the transcript when the current turn
+	// started, captured at `agent_start`. Turn-end auto-collapse folds only
+	// components added since — a thought from an earlier turn that the user
+	// re-opened by hand is part of this baseline by then and stays open.
+	#assistantComponentsAtTurnStart = new Set<AssistantMessageComponent>();
 	#lastAssistantComponent: AssistantMessageComponent | undefined = undefined;
 	// Assistant component whose turn-ending error is currently mirrored in the
 	// pinned banner. Its inline `Error: …` line is suppressed while pinned and
@@ -489,12 +494,23 @@ export class EventController {
 	 * Ctrl+O drives, but the sticky `toolOutputExpanded` preference is left
 	 * alone, so the next turn starts from the user's chosen state and Ctrl+O
 	 * re-expands the collapsed turn in one keystroke. Thinking sections fold
-	 * through the component's per-section state — every assistant block, the
-	 * same reach as the thinking-visibility toggle — and only native rendering
-	 * has a folded thinking presentation; the ANSI transcript renders thinking
-	 * inline. Background jobs are skipped: their cards may still land output.
+	 * through the component's per-section state, scoped to the finished turn
+	 * like the tool timeline: only assistant components added since the turn
+	 * started fold, so a thought from an earlier turn that the user re-opened
+	 * by hand stays open. Only native rendering has a folded thinking
+	 * presentation; the ANSI transcript renders thinking inline. Background
+	 * jobs are skipped: their cards may still land output.
 	 */
 	#collapseTurnActivity(): void {
+		// Whatever is on screen after this settle belongs to settled turns:
+		// re-baseline before folding, so a repeated settle (a background-job
+		// wait ending, say) cannot re-fold blocks the user has since opened.
+		const baseline = this.#assistantComponentsAtTurnStart;
+		this.#assistantComponentsAtTurnStart = new Set(
+			this.ctx.chatContainer.children.filter(
+				(child): child is AssistantMessageComponent => child instanceof AssistantMessageComponent,
+			),
+		);
 		if (!cfgDisplayAutoCollapseOnTurnEnd.get(this.ctx.settings)) return;
 		const background = new Set<ToolExecutionHandle>();
 		for (const toolCallId of this.#backgroundCallIds) {
@@ -510,7 +526,7 @@ export class EventController {
 			}
 		}
 		for (const child of this.ctx.chatContainer.children) {
-			if (child instanceof AssistantMessageComponent) {
+			if (child instanceof AssistantMessageComponent && !baseline.has(child)) {
 				child.collapseThinkingSections();
 			}
 		}
@@ -983,6 +999,7 @@ export class EventController {
 		this.#syntheticFailureCards.clear();
 		this.#orphanedToolCompletions.clear();
 		this.#postToolAssistantComponents.clear();
+		this.#assistantComponentsAtTurnStart.clear();
 		this.#backgroundCallIds.clear();
 		this.#settledBeforeReturn.clear();
 		this.#blockingPrompts.clear();
@@ -1131,6 +1148,11 @@ export class EventController {
 		this.#syntheticFailureCards.clear();
 		this.#orphanedToolCompletions.clear();
 		this.#postToolAssistantComponents.clear();
+		this.#assistantComponentsAtTurnStart = new Set(
+			this.ctx.chatContainer.children.filter(
+				(child): child is AssistantMessageComponent => child instanceof AssistantMessageComponent,
+			),
+		);
 		this.#lastIntent = undefined;
 		// A background result woke the run: the row stops naming the wait and
 		// follows this run's intents again.

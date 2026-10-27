@@ -194,7 +194,7 @@ export class ExtensionUiController {
 			setEditorComponent: factory => this.ctx.setEditorComponent(factory),
 			getToolsExpanded: () => this.ctx.toolOutputExpanded,
 			setToolsExpanded: expanded => this.ctx.setToolsExpanded(expanded),
-			getThinkingExpanded: () => this.ctx.expandThinkingBlocks,
+			getThinkingExpanded: () => this.ctx.thinkingExpandedOverride ?? this.ctx.expandThinkingBlocks,
 			setThinkingExpanded: expanded => this.ctx.setThinkingExpanded(expanded),
 		};
 		const enrichedUiContext = withTerminalLauncher(uiContext, true);

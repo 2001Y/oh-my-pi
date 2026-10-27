@@ -13,6 +13,7 @@ import type { AssistantMessage, ToolCall, Usage } from "@oh-my-pi/pi-ai";
 import { resetSettingsForTest, Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { EventController } from "@oh-my-pi/pi-coding-agent/modes/controllers/event-controller";
 import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
+import { AssistantMessageComponent } from "@oh-my-pi/pi-tui/chat/assistant-message";
 import { initTheme } from "@oh-my-pi/pi-tui/theme";
 import { createInteractiveModeContext } from "./helpers/interactive-mode-context";
 
@@ -100,6 +101,53 @@ function renderedLines(chatContainer: { render(width: number): readonly string[]
 	return chatContainer.render(120).map(line => Bun.stripANSI(line));
 }
 
+async function runThinkingTurn(controller: EventController, answer: string): Promise<AssistantMessage> {
+	const started = assistantMessage([]);
+	const completed = assistantMessage([
+		{ type: "thinking", thinking: `Reasoning before ${answer}` },
+		{ type: "text", text: answer },
+	]);
+	await controller.handleEvent({ type: "message_start", message: started } as Extract<
+		AgentSessionEvent,
+		{ type: "message_start" }
+	>);
+	await controller.handleEvent({ type: "message_end", message: completed } as Extract<
+		AgentSessionEvent,
+		{ type: "message_end" }
+	>);
+	return completed;
+}
+
+async function agentEnd(controller: EventController, message: AssistantMessage): Promise<void> {
+	await controller.handleEvent({ type: "agent_end", messages: [message], isTerminal: true } as Extract<
+		AgentSessionEvent,
+		{ type: "agent_end" }
+	>);
+}
+
+type DescribedNode = {
+	k?: string;
+	p?: Record<string, unknown>;
+	c?: readonly unknown[];
+};
+
+/** The `collapsed` prop of the thinking section in the component's native description. */
+function thinkingSectionCollapsed(component: AssistantMessageComponent): boolean | undefined {
+	const visit = (node: unknown): boolean | undefined => {
+		if (typeof node !== "object" || node === null) return undefined;
+		const described = node as DescribedNode;
+		if (described.k === "section" && described.p?.role === "omp.thinking") {
+			return described.p.collapsed as boolean | undefined;
+		}
+		for (const child of described.c ?? []) {
+			const hit = visit(child);
+			if (hit !== undefined) return hit;
+		}
+		return undefined;
+	};
+	return visit(component.describe());
+}
+
 describe("EventController auto-collapse on turn end", () => {
 	beforeAll(async () => {
 		await initTheme(false);
@@ -146,5 +194,47 @@ describe("EventController auto-collapse on turn end", () => {
 		const lines = renderedLines(chatContainer);
 		expect(lines.some(line => line.includes(DEEP_RESULT_MARKER))).toBe(true);
 		expect(lines.some(line => line.includes(FINAL_MARKER))).toBe(true);
+	});
+
+	it("folds only the finished turn's thinking: a re-opened earlier thought stays open", async () => {
+		await Settings.init({
+			inMemory: true,
+			overrides: { "display.smoothStreaming": false, "display.autoCollapseOnTurnEnd": true },
+		});
+		// The user's preference keeps finished thoughts open; auto-collapse
+		// folds each turn's thinking per-section at its own settle anyway.
+		const ctx = createInteractiveModeContext({
+			toolOutputExpanded: true,
+			expandThinkingBlocks: true,
+			noteDisplayableThinkingContent: vi.fn(() => false),
+			lastAssistantUsage: zeroUsage(),
+		});
+		const controller = new EventController(ctx);
+		const { chatContainer } = ctx;
+		const components = () =>
+			chatContainer.children.filter(
+				(child): child is AssistantMessageComponent => child instanceof AssistantMessageComponent,
+			);
+
+		const turnOne = await runThinkingTurn(controller, "TURN ONE ANSWER");
+		await agentEnd(controller, turnOne);
+		const first = components()[0]!;
+		expect(thinkingSectionCollapsed(first)).toBe(true);
+
+		// The user re-opens the earlier turn's thought by hand.
+		first.handleNativeEvent({ type: "toggle", key: "k0", collapsed: false });
+		expect(thinkingSectionCollapsed(first)).toBe(false);
+
+		await controller.handleEvent({ type: "agent_start" } as Extract<AgentSessionEvent, { type: "agent_start" }>);
+		const turnTwo = await runThinkingTurn(controller, "TURN TWO ANSWER");
+		await agentEnd(controller, turnTwo);
+
+		const second = components().find(component => component !== first)!;
+		// The turn that just finished folded…
+		expect(thinkingSectionCollapsed(second)).toBe(true);
+		// …but the earlier turn's re-opened thought was not re-folded with it.
+		expect(thinkingSectionCollapsed(first)).toBe(false);
+		// The creation preference still stands for whatever renders next.
+		expect(ctx.expandThinkingBlocks).toBe(true);
 	});
 });

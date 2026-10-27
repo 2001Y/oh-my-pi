@@ -1456,6 +1456,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	}
 	proseOnlyThinking = true;
 	expandThinkingBlocks = false;
+	thinkingExpandedOverride: boolean | undefined = undefined;
 	compactionQueuedMessages: CompactionQueuedMessage[] = [];
 	pendingTools = new Map<string, ToolExecutionHandle>();
 	transcriptMessageComponents = new WeakMap<AgentMessage, Component>();

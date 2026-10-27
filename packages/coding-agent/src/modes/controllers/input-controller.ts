@@ -2915,22 +2915,26 @@ export class InputController {
 	}
 
 	/**
-	 * Session-scoped counterpart to `cfgExpandThinkingBlocks`, mirroring
-	 * {@link setToolsExpanded}: applies to every live assistant block without
-	 * rewriting the persisted setting, so an extension can fold a finished
-	 * turn's thinking from `agent_end` and the next turn still starts from the
-	 * user's configured preference. Only native rendering folds thinking
-	 * sections; the ANSI transcript renders them inline.
+	 * Session-scoped thinking counterpart to {@link setToolsExpanded}, for
+	 * extensions: force every live assistant block's thinking sections open or
+	 * folded — per-section choices the user recorded by hand included — and
+	 * record the override for `getThinkingExpanded`. The creation preference
+	 * is deliberately NOT rewritten: `ctx.expandThinkingBlocks` mirrors the
+	 * persisted `expandThinkingBlocks` setting and seeds every newly created
+	 * block, so an extension folding a finished turn from `agent_end` leaves
+	 * the next turn's blocks starting from the user's configured preference.
+	 * Only native rendering folds thinking sections; the ANSI transcript
+	 * renders them inline.
 	 */
 	setThinkingExpanded(expanded: boolean): void {
-		this.ctx.expandThinkingBlocks = expanded;
+		this.ctx.thinkingExpandedOverride = expanded;
 		for (const child of this.ctx.chatContainer.children) {
 			if (child instanceof AssistantMessageComponent) {
-				child.setExpandThinkingBlocks(expanded);
+				child.setThinkingSectionsExpanded(expanded);
 			}
 		}
 		if (this.ctx.streamingComponent) {
-			this.ctx.streamingComponent.setExpandThinkingBlocks(expanded);
+			this.ctx.streamingComponent.setThinkingSectionsExpanded(expanded);
 		}
 		this.ctx.ui.requestRender(true);
 	}
